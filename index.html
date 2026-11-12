@@ -55,8 +55,9 @@ function login(){
   <button class="b" onclick="signIn()">Sign in</button><button class="b s" onclick="signUp()">Create account</button>
   <button class="b s" onclick="localStorage.clear();start()">Change project</button><p id="m" class="err"></p></div>`);
 }
-async function signIn(){const{error}=await sb.auth.signInWithPassword({email:val('e'),password:val('p')});error?$('#m').textContent=error.message:boot()}
-async function signUp(){const{error}=await sb.auth.signUp({email:val('e'),password:val('p')});$('#m').textContent=error?error.message:'Account created. Ask the Super Admin to assign your role, then sign in.'}
+const need=()=>{if(!val('e')||val('p').length<6){$('#m').textContent='Type your email and a password of at least 6 characters first.';return true}};
+async function signIn(){if(need())return;const{error}=await sb.auth.signInWithPassword({email:val('e'),password:val('p')});error?$('#m').textContent=error.message:boot()}
+async function signUp(){if(need())return;const{error}=await sb.auth.signUp({email:val('e'),password:val('p')});$('#m').textContent=error?error.message:'Account created. Ask the Super Admin to assign your role, then sign in.'}
 async function boot(){
   const{data:{user}}=await sb.auth.getUser();
   const{data}=await sb.from('rf_profiles').select('*').eq('user_id',user.id).maybeSingle();
