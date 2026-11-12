@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Refusal Analysis | AIMS Education</title>
+<style>
+:root{--t:#0f766e;--td:#0a4f4a;--g:#c9a227;--bg:#f3f6f5;--c:#fff;--tx:#17302d;--m:#5a6e6b;--ln:#d5e0de;--r:#b42318}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1918;--c:#152624;--tx:#e5eeec;--m:#9ab0ad;--ln:#27403d}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 Georgia,'Times New Roman',serif}
+h1,h2,h3,button,input,select,textarea,th,nav{font-family:system-ui,Segoe UI,Arial,sans-serif}
+header{background:var(--td);color:#fff;padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:3px solid var(--g)}
+header b{font-size:17px;margin-right:auto}header span{font-size:12px;opacity:.85}
+nav{display:flex;gap:6px;flex-wrap:wrap}nav button{background:transparent;color:#fff;border:1px solid #ffffff55;padding:5px 12px;border-radius:4px;cursor:pointer}
+nav button.on{background:var(--g);color:#1b1b1b;border-color:var(--g)}
+main{max-width:1000px;margin:0 auto;padding:16px}
+.card{background:var(--c);border:1px solid var(--ln);border-radius:6px;padding:14px;margin-bottom:14px}
+h2{margin:0 0 10px;font-size:19px;color:var(--t)}h3{margin:14px 0 6px;font-size:15px}
+input,select,textarea{width:100%;padding:7px;border:1px solid var(--ln);border-radius:4px;background:var(--bg);color:var(--tx);font-size:14px}
+textarea{min-height:100px}label{font:12px system-ui;color:var(--m);display:block;margin:6px 0 2px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+button.b{background:var(--t);color:#fff;border:0;padding:7px 14px;border-radius:4px;cursor:pointer;margin:6px 6px 0 0}
+button.b:hover,nav button:hover{filter:brightness(1.15)}button.s{background:transparent;color:var(--t);border:1px solid var(--t)}button.d{background:var(--r)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--g);outline-offset:1px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px;border-bottom:1px solid var(--ln);font-size:14px;vertical-align:top}
+.v{padding:1px 8px;border-radius:10px;font:600 12px system-ui;color:#fff}.Good{background:#2b8a3e}.Weak{background:#b7791f}.Risky{background:var(--r)}
+mark{background:#f7d97a;color:#222;border-radius:2px;padding:0 2px}.m{color:var(--m);font-size:13px}.err{color:var(--r)}
+.bar{height:10px;background:var(--g);border-radius:2px}.cats label{display:inline-block;margin:3px 10px 3px 0;font-size:13px;color:var(--tx)}.cats input{width:auto}
+footer{text-align:center;color:var(--m);font-size:12px;padding:16px}
+</style></head><body>
+<header><img id="lg" alt="University logo" style="height:36px;background:#fff;border-radius:4px;padding:2px;display:none"><b>Refusal Analysis · AIMS Education</b><nav id="nav"></nav><span id="who"></span></header>
+<main id="app"></main>
+<footer>Guidance for preparation only. Not legal advice. No guarantee of any visa result. Drafts need an officer's review.</footer>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const CATS=['Course knowledge','University knowledge','Career plan','Finance and sponsor','Accommodation','English ability','Inconsistency with documents','Ties and plan after study','Generic or memorised answers','Previous refusal or travel history','Documents','Other'];
+const $=s=>document.querySelector(s),esc=s=>(s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let sb,me,kb=[],cur=null;
+const app=h=>$('#app').innerHTML=h;
+const val=id=>{const e=document.getElementById(id);return e?e.value.trim():''};
+async function audit(action,entity,id,detail){try{await sb.from('rf_audit').insert({action,entity,entity_id:id,detail})}catch(e){}}
+function err(e){alert(e&&e.message?e.message:e)}
+
+// ---------- start, config, login ----------
+function start(){
+  const u=localStorage.rf_url,k=localStorage.rf_key;
+  if(!u||!k)return app(`<div class="card"><h2>Connect to Supabase</h2><p class="m">Paste your project URL and anon key. They stay in this browser only.</p>
+  <label>Project URL</label><input id="u" placeholder="https://xxxx.supabase.co"><label>Anon key</label><input id="k">
+  <button class="b" onclick="saveCfg()">Save and continue</button></div>`);
+  sb=supabase.createClient(u,k);
+  sb.auth.getSession().then(({data})=>data.session?boot():login());
+}
+function saveCfg(){localStorage.rf_url=val('u');localStorage.rf_key=val('k');start()}
+function login(){
+  $('#nav').innerHTML='';
+  app(`<div class="card" style="max-width:380px;margin:30px auto"><h2>Sign in</h2><label>Email</label><input id="e" type="email"><label>Password</label><input id="p" type="password">
+  <button class="b" onclick="signIn()">Sign in</button><button class="b s" onclick="signUp()">Create account</button>
+  <button class="b s" onclick="localStorage.clear();start()">Change project</button><p id="m" class="err"></p></div>`);
+}
+async function signIn(){const{error}=await sb.auth.signInWithPassword({email:val('e'),password:val('p')});error?$('#m').textContent=error.message:boot()}
+async function signUp(){const{error}=await sb.auth.signUp({email:val('e'),password:val('p')});$('#m').textContent=error?error.message:'Account created. Ask the Super Admin to assign your role, then sign in.'}
+async function boot(){
+  const{data:{user}}=await sb.auth.getUser();
+  const{data}=await sb.from('rf_profiles').select('*').eq('user_id',user.id).maybeSingle();
+  if(!data)return app(`<div class="card"><h2>No role yet</h2><p>Student? Enter the invite code and CRM number your counsellor gave you. Staff: ask the Super Admin to add you in rf_profiles.</p><label>Invite code</label><input id="ic"><label>CRM number</label><input id="ik"><button class="b" onclick="claim()">Join</button><button class="b s" onclick="out()">Sign out</button></div>`);
+  me=data;$('#who').textContent=`${user.email} (${me.role})`;
+  const r=await sb.from('rf_kb_questions').select('*').is('deleted_at',null);kb=r.data||[];
+  if(me.role==='student'){$('#nav').innerHTML='<button onclick="out()">Sign out</button>';return studentPortal()}
+  $('#nav').innerHTML=['Cases','Students','Prepare','Knowledge base','Dashboard','Recycle bin'].map((n,i)=>`<button onclick="go(${i},this)" class="${i?'':'on'}">${n}</button>`).join('')+'<button onclick="out()">Sign out</button>';
+  go(0);
+}
+async function out(){await sb.auth.signOut();me=null;login()}
+function go(i,el){document.querySelectorAll('nav button').forEach(b=>b.classList.remove('on'));if(el)el.classList.add('on');[casesView,studentsView,prepView,kbView,dashView,binView][i]()}
+
+// ---------- cases ----------
+async function casesView(){
+  const{data,error}=await sb.from('rf_cases').select('*').is('deleted_at',null).order('created_at',{ascending:false});
+  if(error)return err(error);
+  app(`<div class="card"><h2>Cases</h2><table><tr><th>Code</th><th>Course</th><th>University</th><th>Interview</th><th></th></tr>
+  ${(data||[]).map(c=>`<tr><td>${esc(c.case_code)}</td><td>${esc(c.course)}</td><td>${esc(c.university)}</td><td>${esc(c.interview_date)}</td><td><button class="b s" onclick="openCase('${c.id}')">Open</button></td></tr>`).join('')||'<tr><td colspan=5 class="m">No cases yet. Add the first one below.</td></tr>'}</table></div>
+  <div class="card"><h2>Add a case</h2><p class="m">Use an anonymised code, never the student's name.</p><div class="g">
+  <div><label>Case code</label><input id="cc"></div><div><label>Course</label><input id="co"></div><div><label>Level</label><input id="lv"></div>
+  <div><label>University</label><input id="un"></div><div><label>Intake</label><input id="in"></div><div><label>Country</label><input id="ct"></div>
+  <div><label>Funding type</label><input id="fu"></div><div><label>Tuition fee (GBP)</label><input id="fe" type="number"></div><div><label>Interview date</label><input id="id" type="date"></div>
+  <div><label>Retention (days)</label><input id="rt" type="number" value="365"></div></div>
+  <label><input type="checkbox" id="cn" style="width:auto"> Student consent recorded</label><button class="b" onclick="addCase()">Save case</button></div>`);
+}
+async function addCase(){
+  if(!val('cc'))return err('Enter a case code.');
+  const{error}=await sb.from('rf_cases').insert({case_code:val('cc'),course:val('co'),level:val('lv'),university:val('un'),intake:val('in'),country:val('ct'),funding_type:val('fu'),fee_gbp:val('fe')||null,interview_date:val('id')||null,retention_days:+val('rt')||365,consent:$('#cn').checked,branch_id:me.branch_id});
+  error?err(error):casesView();
+}
+async function openCase(id){
+  const[c,q,r,a,p]=await Promise.all(['rf_cases','rf_qa','rf_reasons','rf_analysis','rf_plan'].map(t=>sb.from(t).select('*').eq(t=='rf_cases'?'id':'case_id',id).is('deleted_at',null).order('created_at')));
+  cur=c.data[0];if(!cur)return err('Case not found.');cur.qa=q.data||[];cur.reasons=(r.data||[])[0];cur.an=a.data||[];cur.plan=p.data||[];
+  audit('view','case',id);renderCase();
+}
+function hl(text,bad){let h=esc(text);(bad||[]).forEach(b=>{const s=esc(b.text);h=h.replace(s,`<mark title="${esc(b.reason)}">${s}</mark>`)});return h}
+function renderCase(){
+  const c=cur,sel=(c.reasons&&c.reasons.categories)||[];
+  app(`<div class="card"><button class="b s" onclick="casesView()">Back</button><h2>${esc(c.case_code)}</h2>
+  <p class="m">${esc(c.course)} · ${esc(c.university)} · fee ${esc(c.fee_gbp)} · retention ${c.retention_days} days · consent ${c.consent?'yes':'no'}</p>
+  <button class="b s" onclick="exportCase()">Export JSON</button><button class="b d" onclick="delCase()">Delete case</button></div>
+  <div class="card"><h2>Interview record</h2><p class="m">Paste lines starting with Q: and A:. Personal details are masked before saving.</p>
+  <textarea id="tx" placeholder="Q: Why did you choose the UK?&#10;A: ..."></textarea>
+  <select id="sr"><option value="transcript">Source: transcript</option><option value="letter">Source: refusal letter</option><option value="notes">Source: notes</option><option value="memory">Source: memory</option></select>
+  <button class="b" onclick="addQA()">Parse and save</button>
+  <table><tr><th>Question and answer</th><th></th></tr>${c.qa.map(x=>`<tr><td><b>${esc(x.question)}</b><br>${hl(x.answer,(c.an.find(y=>y.qa_id==x.id)||{}).highlights)}</td><td><button class="b s" onclick="delRow('rf_qa','${x.id}')">Delete</button></td></tr>`).join('')||'<tr><td class="m">No answers yet.</td></tr>'}</table></div>
+  <div class="card"><h2>Refusal reasons</h2><div class="cats">${CATS.map(k=>`<label><input type="checkbox" value="${k}" ${sel.includes(k)?'checked':''}> ${k}</label>`).join('')}</div>
+  <label>Officer's words from the letter</label><textarea id="ow">${esc(c.reasons&&c.reasons.officer_words)}</textarea><button class="b" onclick="saveReasons()">Save reasons</button></div>
+  <div class="card"><h2>Analysis</h2><p class="m">Rule-based checks. A guide for review, not a score or a prediction.</p><button class="b" onclick="runAnalysis()">Run analysis</button>
+  ${c.an.map(a=>{const x=c.qa.find(q=>q.id==a.qa_id);return x?`<h3>${esc(x.question)} <span class="v ${a.verdict}">${a.verdict}</span></h3>
+  <p class="m">Issues: ${a.issue_tags.join(', ')||'none'}</p>${(a.highlights||[]).map(h=>`<p>• <mark>${esc(h.text.slice(0,90))}</mark> ${esc(h.reason)}</p>`).join('')}
+  ${a.missing_points.length?`<p><b>Missing:</b> ${a.missing_points.map(esc).join('; ')}</p>`:''}<p><b>Stronger structure:</b> ${esc(a.stronger_structure)}</p>
+  ${(a.evidence_checklist||[]).length?`<p><b>Evidence to prepare:</b> ${a.evidence_checklist.map(esc).join('; ')}</p>`:''}`:''}).join('')}</div>
+  <div class="card"><h2>Resolution plan</h2><div class="g"><div><label>Type</label><select id="pk"><option>fix</option><option>practice</option><option>mock_set</option></select></div>
+  <div><label>Item</label><input id="pi"></div><div><label>Due date</label><input id="pd" type="date"></div></div><button class="b" onclick="addPlan()">Add item</button>
+  <table>${c.plan.map(x=>`<tr><td>${x.kind}</td><td>${esc(x.item)}</td><td>${esc(x.due_date)}</td><td><button class="b s" onclick="delRow('rf_plan','${x.id}')">Delete</button></td></tr>`).join('')}</table></div>`);
+}
+async function saveReasons(){
+  const cats=[...document.querySelectorAll('.cats input:checked')].map(i=>i.value),row={case_id:cur.id,categories:cats,officer_words:val('ow')};
+  const{error}=cur.reasons?await sb.from('rf_reasons').update(row).eq('id',cur.reasons.id):await sb.from('rf_reasons').insert(row);
+  error?err(error):openCase(cur.id);
+}
+async function addPlan(){if(!val('pi'))return;const{error}=await sb.from('rf_plan').insert({case_id:cur.id,kind:val('pk'),item:val('pi'),due_date:val('pd')||null,owner_id:(await sb.auth.getUser()).data.user.id});error?err(error):openCase(cur.id)}
+async function delRow(t,id){const{error}=await sb.from(t).update({deleted_at:new Date().toISOString()}).eq('id',id);audit('delete',t,id);error?err(error):openCase(cur.id)}
+async function delCase(){if(prompt(`Type ${cur.case_code} to delete this case. It goes to the Recycle bin.`)!==cur.case_code)return;
+  const{error}=await sb.from('rf_cases').update({deleted_at:new Date().toISOString()}).eq('id',cur.id);audit('delete','case',cur.id);error?err(error):casesView()}
+
+// ---------- paste parser and anonymiser ----------
+function anon(t){return t.replace(/[\w.+-]+@[\w-]+\.[\w.]+/g,'[email]').replace(/\+?\d[\d\s-]{8,}\d/g,'[number]').replace(/\b(GWF|SARU)[-\w]*/gi,'[ref]').replace(/\bSHEFFIELD\/\d+/gi,'[ref]')}
+function parse(t){const o=[];let c=null;for(const l of t.split(/\r?\n/)){const m=l.match(/^\s*(Q|A)\s*[:.)-]\s*(.*)$/i);
+  if(m){if(m[1].toUpperCase()=='Q'){c={q:m[2],a:''};o.push(c)}else if(c)c.a+=(c.a?' ':'')+m[2]}else if(c&&l.trim())c[c.a?'a':'q']+=' '+l.trim()}return o}
+async function addQA(){
+  const p=parse(anon(val('tx')));if(!p.length)return err('No Q: and A: lines found.');
+  const rows=p.map((x,i)=>({case_id:cur.id,seq:cur.qa.length+i,question:x.q,answer:x.a,source:val('sr'),confidence:'approximate'}));
+  const{error}=await sb.from('rf_qa').insert(rows);error?err(error):openCase(cur.id);
+}
+
+// ---------- rule-based analysis ----------
+const HEDGE=/\b(maybe|i think|basically|actually|kind of|sort of|probably|i guess)\b/i;
+const GEN=/\b(good|best|excellent|world.class|reputation|reputed|quality|practical|skills?|international|recognised|recognized|exposure|opportunit\w+|leadership|communication|problem.solving|strategic)\b/gi;
+const STOP=new Set('the and for are was you your what how why did this that with have has which about tell'.split(' '));
+const toks=s=>(s.toLowerCase().match(/[a-z]{3,}/g)||[]).filter(w=>!STOP.has(w));
+function matchKb(q){const qt=new Set(toks(q));let b=null,bs=0;for(const k of kb){let s=0;toks(k.question).forEach(w=>qt.has(w)&&s++);if(s>bs){bs=s;b=k}}return bs>=2?b:null}
+function analyse(x,cs){
+  const a=x.answer||'',w=a.split(/\s+/).filter(Boolean),tags=[],hi=[],k=matchKb(x.question);
+  const sents=a.split(/(?<=[.!?])\s+|\n/).filter(s=>s.trim());
+  if(w.length<25){hi.push({text:a.slice(0,80)||'(empty)',reason:'Too short to show real knowledge'});tags.push('generic_answer')}
+  sents.forEach(s=>{const g=(s.match(GEN)||[]).length,r=[];
+    if(g>=3&&!/\d/.test(s)){r.push('Skill and quality words with no explanation');tags.push('keyword_stacking')}
+    if(HEDGE.test(s))r.push('Hedging words');if(r.length)hi.push({text:s,reason:r.join('; ')})});
+  if(w.length>=25&&!/\d/.test(a)&&!w.slice(1).some(t=>/^[A-Z][a-z]{3,}/.test(t))){hi.push({text:a.slice(0,80),reason:'No numbers or names'});tags.push('generic_answer')}
+  const bg={};for(let i=0;i<w.length-1;i++){const g=(w[i]+' '+w[i+1]).toLowerCase();bg[g]=(bg[g]||0)+1}
+  if(Object.values(bg).some(n=>n>=3)){hi.push({text:a.slice(0,80),reason:'Repeated phrases'});}
+  if(sents.length<=1&&w.length>70){hi.push({text:a.slice(0,80),reason:'One long run with no pauses: may sound memorised'});tags.push('scripted_memorised')}
+  const fee=+cs.fee_gbp;if(fee)(a.match(/\d[\d,]{3,6}/g)||[]).map(n=>+n.replace(/,/g,'')).filter(n=>n>=3000&&n<=60000&&Math.abs(n-fee)/fee>.1).slice(0,1).forEach(n=>{hi.push({text:String(n),reason:`Differs from the intake fee of ${fee}`});tags.push('inconsistent')});
+  let miss=[],cov=1,exp=[],ev=[],st='';
+  if(k){const pts=k.key_points||[];miss=pts.filter(p=>![...(p.keywords||[]),...(p.alternatives||[])].some(t=>a.toLowerCase().includes(t.toLowerCase()))).map(p=>p.point);
+    cov=pts.length?(pts.length-miss.length)/pts.length:1;exp=pts.map(p=>p.point);ev=k.evidence_to_prepare||[];
+    st=`${k.answer_structure||'DEPS'}: `+(miss.length?miss.map(m=>`[your real fact: ${m}]`).join(' '):'Add [a real example from your own research].');}
+  else st='No matching knowledge-base question. Use Point, Evidence, Explanation with [your real facts].';
+  const verdict=cov<.34||hi.length>=3?'Risky':cov<.67||hi.length?'Weak':'Good';
+  return{case_id:cs.id,qa_id:x.id,kb_question_id:k&&k.id,verdict,highlights:hi,issue_tags:[...new Set(tags)],missing_points:miss,expected_points:exp,stronger_structure:st,evidence_checklist:ev,k};
+}
+async function runAnalysis(){
+  for(const x of cur.qa){const r=analyse(x,cur),kid=r.kb_question_id;delete r.k;delete r.kb_question_id;
+    await sb.from('rf_analysis').delete().eq('qa_id',x.id);const{error}=await sb.from('rf_analysis').insert(r);if(error)return err(error);
+    if(kid)await sb.from('rf_qa').update({kb_question_id:kid}).eq('id',x.id)}
+  audit('edit','analysis',cur.id);openCase(cur.id);
+}
+
+// ---------- knowledge base ----------
+function kbView(){
+  app(`<div class="card"><h2>Knowledge base</h2><p class="m">All entries are drafts. Verify against current UK guidance.</p>
+  ${['super_admin','branch_admin'].includes(me.role)?`<label>Import seed file (JSON)</label><input type="file" id="kf" accept=".json" onchange="importKb(this)">`:''}
+  <table><tr><th>Family</th><th>Question</th><th>Structure</th></tr>${kb.map(k=>`<tr><td>${esc(k.course_family)}</td><td>${esc(k.question)}<br><span class="m">${esc(k.officer_checks)}</span></td><td>${esc(k.answer_structure)}</td></tr>`).join('')||'<tr><td colspan=3 class="m">Empty. Admins can import the seed file.</td></tr>'}</table></div>`);
+}
+async function importKb(i){
+  const j=JSON.parse(await i.files[0].text()),have=new Set(kb.map(k=>k.question));
+  const rows=j.questions.filter(q=>!have.has(q.question)).map(q=>({...q,last_reviewed:null}));
+  if(!rows.length)return err('Nothing new to import.');
+  const{error}=await sb.from('rf_kb_questions').insert(rows);if(error)return err(error);
+  kb=(await sb.from('rf_kb_questions').select('*').is('deleted_at',null)).data||[];kbView();
+}
+
+// ---------- students ----------
+let stu=null,mock=null;
+const setLogo=u=>{$('#lg').style.display=u?'block':'none';$('#lg').src=u||''};
+async function claim(){const{error}=await sb.rpc('rf_claim_student',{code:val('ic'),crm:val('ik')});error?err(error):boot()}
+async function studentsView(){
+  setLogo(null);const{data,error}=await sb.from('rf_students').select('*').is('deleted_at',null).order('created_at',{ascending:false});if(error)return err(error);
+  app(`<div class="card"><h2>Students</h2><table><tr><th>Name</th><th>CRM</th><th>University</th><th>Interview</th><th>Access</th><th></th></tr>
+  ${(data||[]).map(x=>`<tr><td>${x.university_logo_url?`<img src="${esc(x.university_logo_url)}" alt="" style="height:22px;vertical-align:middle"> `:''}${esc(x.full_name)}</td><td>${esc(x.crm_number)}</td><td>${esc(x.university_name)}</td><td>${esc(x.interview_date)}</td>
+  <td>${x.user_id?'Joined':'Invite: <b>'+esc(x.invite_code)+'</b>'}</td><td><button class="b s" onclick="studentDetail('${x.id}')">Open</button></td></tr>`).join('')||'<tr><td colspan=6 class="m">No students yet.</td></tr>'}</table>
+  <p class="m">Give the student their invite code and CRM number. They sign up on this page, choose Create account, then enter both.</p></div>
+  <div class="card"><h2>Add a student</h2><div class="g"><div><label>Full name</label><input id="sn"></div><div><label>CRM number</label><input id="sc"></div><div><label>University name</label><input id="su"></div>
+  <div><label>University logo</label><input id="sl" type="file" accept="image/*"></div><div><label>Course</label><input id="sk"></div><div><label>Intake</label><input id="si"></div><div><label>Interview date</label><input id="sd" type="date"></div></div>
+  <label><input type="checkbox" id="scn" style="width:auto"> Student consent recorded</label><button class="b" onclick="addStudent()">Save student</button></div>`);
+}
+async function addStudent(){
+  if(!val('sn')||!val('sc'))return err('Enter the name and CRM number.');
+  let url=null;const fl=$('#sl').files[0];
+  if(fl){const path=Date.now()+'_'+fl.name.replace(/[^\w.]/g,'_'),u=await sb.storage.from('rf-logos').upload(path,fl);if(u.error)return err(u.error);url=sb.storage.from('rf-logos').getPublicUrl(path).data.publicUrl}
+  const{error}=await sb.from('rf_students').insert({full_name:val('sn'),crm_number:val('sc'),university_name:val('su'),university_logo_url:url,course:val('sk'),intake:val('si'),interview_date:val('sd')||null,consent:$('#scn').checked,branch_id:me.branch_id});
+  error?err(error):studentsView();
+}
+const hist=h=>`<table><tr><th>When</th><th>Question</th><th>Result</th></tr>${h.map(x=>`<tr><td>${new Date(x.created_at).toLocaleDateString()}</td><td>${esc(x.question)}</td><td><span class="v ${x.verdict}">${x.verdict}</span></td></tr>`).join('')||'<tr><td colspan=3 class="m">No practice yet.</td></tr>'}</table>`;
+const days=d=>{if(!d)return '';const n=Math.ceil((new Date(d)-Date.now())/864e5);return n>0?`${n} days to your interview`:n==0?'Your interview is today':'Interview date has passed'};
+async function studentDetail(id){
+  const[s,f,h]=await Promise.all([sb.from('rf_students').select('*').eq('id',id).single(),sb.from('rf_student_facts').select('*').eq('student_id',id).maybeSingle(),sb.from('rf_practice').select('*').eq('student_id',id).order('created_at',{ascending:false}).limit(30)]);
+  const x=s.data;audit('view','student',id);setLogo(x.university_logo_url);const fa=(f.data&&f.data.facts)||{};
+  app(`<div class="card"><button class="b s" onclick="studentsView()">Back</button><h2>${esc(x.full_name)}</h2><p>CRM ${esc(x.crm_number)} · ${esc(x.university_name)} · ${esc(x.course)} · ${esc(x.intake)}</p><p class="m">${days(x.interview_date)}</p></div>
+  <div class="card"><h2>Their facts</h2>${FACTS.map(([i,t])=>`<p><b>${t}</b><br>${esc(fa[i])||'<span class="m">Not filled yet.</span>'}</p>`).join('')}</div>
+  <div class="card"><h2>Practice history</h2>${hist(h.data||[])}</div>`);
+}
+async function studentPortal(){
+  const{data:{user}}=await sb.auth.getUser();
+  stu=(await sb.from('rf_students').select('*').eq('user_id',user.id).maybeSingle()).data;
+  if(!stu)return app('<div class="card"><h2>Profile not found</h2><p>Ask your counsellor to check your record.</p></div>');
+  stu.f=(await sb.from('rf_student_facts').select('*').eq('student_id',stu.id).maybeSingle()).data||{facts:{},ready:[]};
+  stu.h=(await sb.from('rf_practice').select('*').eq('student_id',stu.id).order('created_at',{ascending:false}).limit(10)).data||[];
+  setLogo(stu.university_logo_url);renderStu();
+}
+function renderStu(){
+  const f=stu.f.facts||{},ev=[...new Set(kb.flatMap(k=>k.evidence_to_prepare||[]))],dn=(stu.f.ready||[]).filter(x=>ev.includes(x));
+  app(`<div class="card"><h2>${esc(stu.full_name)}</h2><p>CRM ${esc(stu.crm_number)} · ${esc(stu.university_name)} · ${esc(stu.course)}</p><p><b>${days(stu.interview_date)}</b></p>
+  <p>Answer in your own words, using only true facts. Officers refuse answers that sound memorised or generic. Your counsellor can see your practice.</p></div>
+  <div class="card"><h2>1. My real facts</h2>${FACTS.map(([i,t])=>`<label>${t}</label><textarea onchange="saveStu('${i}',this.value)">${esc(f[i])}</textarea>`).join('')}</div>
+  <div class="card"><h2>2. Practise one question</h2><select id="pq" onchange="showQ()">${kb.map((k,i)=>`<option value="${i}">${esc(k.question)}</option>`).join('')}</select><p id="qi" class="m"></p>
+  <textarea id="pa" style="min-height:140px"></textarea><button class="b" onclick="checkStu()">Check and save</button><div id="pr"></div></div>
+  <div class="card"><h2>3. Mock interview</h2><p class="m">Five random questions, one after another, saved to your history.</p><button class="b" onclick="startMock()">Start mock interview</button><div id="mk"></div></div>
+  <div class="card"><h2>4. Preparation checklist</h2><p><b>${dn.length} of ${ev.length}</b> ready. This tracks preparation only.</p>${ev.map((e,i)=>`<label class="cats" style="display:block;color:var(--tx);font-size:14px"><input type="checkbox" style="width:auto" ${dn.includes(e)?'checked':''} onchange="tickStu(${i},this.checked)"> ${esc(e)}</label>`).join('')}</div>
+  <div class="card"><h2>My recent practice</h2>${hist(stu.h)}</div>`);
+  if(kb.length)showQ();
+}
+async function persistStu(){await sb.from('rf_student_facts').upsert({student_id:stu.id,facts:stu.f.facts,ready:stu.f.ready,updated_at:new Date().toISOString()})}
+function saveStu(i,v){stu.f.facts=stu.f.facts||{};stu.f.facts[i]=v;persistStu()}
+function tickStu(i,on){const ev=[...new Set(kb.flatMap(k=>k.evidence_to_prepare||[]))];let d=(stu.f.ready||[]).filter(x=>ev.includes(x));d=on?[...new Set([...d,ev[i]])]:d.filter(x=>x!==ev[i]);stu.f.ready=d;persistStu()}
+async function saveTry(k,ans,r,mid){const row={student_id:stu.id,kb_question_id:k.id,mock_id:mid||null,question:k.question,answer:ans,verdict:r.verdict,feedback:r.highlights};const{error}=await sb.from('rf_practice').insert(row);if(!error)stu.h.unshift({...row,created_at:new Date().toISOString()});return error}
+const fb=r=>`${r.highlights.map(h=>`<p>• <mark>${esc(h.text.slice(0,90))}</mark> ${esc(h.reason)}</p>`).join('')||'<p>No weak lines found by the checks.</p>'}${r.missing_points.length?`<p><b>Not yet covered:</b> ${r.missing_points.map(esc).join('; ')}</p>`:''}<p><b>Next try:</b> ${esc(r.stronger_structure)}</p>`;
+async function checkStu(){const k=kb[+val('pq')],a=val('pa'),r=analyse({id:null,question:k.question,answer:a},{fee_gbp:null});const e=await saveTry(k,a,r);if(e)return err(e);
+  $('#pr').innerHTML=`<h3>Feedback <span class="v ${r.verdict}">${r.verdict}</span></h3><p class="m">A guide for practice, not a score. Fill each [your real fact] from section 1. If you do not have it yet, research it. Never make one up.</p>${fb(r)}`}
+function startMock(){mock={qs:[...kb].sort(()=>Math.random()-.5).slice(0,5),i:0,id:crypto.randomUUID(),res:[]};mockView()}
+function mockView(){
+  if(mock.i>=mock.qs.length){const g=mock.res.filter(x=>x.r.verdict=='Good').length;return $('#mk').innerHTML=`<h3>Mock finished: ${g} of ${mock.qs.length} answers looked strong</h3><table>${mock.res.map(x=>`<tr><td>${esc(x.k.question)}</td><td><span class="v ${x.r.verdict}">${x.r.verdict}</span></td></tr>`).join('')}</table><p class="m">Practise the Risky and Weak ones again, using your real facts. Your counsellor can see this.</p>`}
+  $('#mk').innerHTML=`<h3>Question ${mock.i+1} of ${mock.qs.length}</h3><p><b>${esc(mock.qs[mock.i].question)}</b></p><textarea id="ma" style="min-height:130px"></textarea><button class="b" onclick="mockNext()">${mock.i==mock.qs.length-1?'Finish':'Next question'}</button>`}
+async function mockNext(){const k=mock.qs[mock.i],a=val('ma'),r=analyse({id:null,question:k.question,answer:a},{fee_gbp:null});const e=await saveTry(k,a,r,mock.id);if(e)return err(e);mock.res.push({k,r});mock.i++;mockView()}
+
+// ---------- prepare (for students facing the interview) ----------
+const FACTS=[['f1','The course and university I chose, and why this course'],['f2','Two other UK universities I compared, and the real difference'],['f3','Other countries I looked at, with named universities'],['f4','Websites I used and how long I researched'],['f5','Two modules and what each really covers'],['f6','My first job after returning home, its duties, and who could employ me'],['f7','Who pays for my studies and where that money comes from']];
+const LS=(k,d)=>{try{return JSON.parse(localStorage[k]||d)}catch(e){return JSON.parse(d)}};
+function prepView(){
+  const f=LS('rf_facts','{}'),dn=LS('rf_ready','[]'),ev=[...new Set(kb.flatMap(k=>k.evidence_to_prepare||[]))],fl=[...new Set(kb.flatMap(k=>k.red_flags||[]))].slice(0,14);
+  app(`<div class="card"><h2>Prepare for the interview</h2><p>The officer decides whether you are a genuine student from how well you explain <b>your own real plans</b>. Use only true facts, in your own words. A memorised script is itself a reason officers give for refusal.</p>
+  <p class="m">Notes below stay in this browser only and are never saved to the database. Do not type names, passport or reference numbers.</p></div>
+  <div class="card"><h2>1. My real facts</h2>${FACTS.map(([i,t])=>`<label>${t}</label><textarea id="${i}" oninput="saveFact('${i}',this.value)">${esc(f[i])}</textarea>`).join('')}
+  <button class="b s" onclick="if(confirm('Clear all notes and progress?')){localStorage.removeItem('rf_facts');localStorage.removeItem('rf_ready');prepView()}">Clear my notes</button></div>
+  <div class="card"><h2>2. Practise a question</h2>${kb.length?`<select id="pq" onchange="showQ()">${kb.map((k,i)=>`<option value="${i}">${esc(k.question)}</option>`).join('')}</select>
+  <button class="b s" onclick="$('#pq').value=Math.floor(Math.random()*kb.length);showQ()">Random question</button><p id="qi" class="m"></p>
+  <label>Your answer, in your own words</label><textarea id="pa" style="min-height:140px"></textarea><button class="b" onclick="checkAns()">Check my answer</button><div id="pr"></div>`:'<p class="m">No questions yet. An admin needs to import the knowledge base first.</p>'}</div>
+  <div class="card"><h2>3. Preparation checklist</h2><p class="m">Things to have ready and understand. This tracks preparation only. It does not predict any result.</p>
+  <p><b id="pg">${dn.length} of ${ev.length}</b> ready</p>${ev.map((e,i)=>`<label class="cats" style="display:block;color:var(--tx);font-size:14px"><input type="checkbox" style="width:auto" ${dn.includes(e)?'checked':''} onchange="tick(${i},this.checked)"> ${esc(e)}</label>`).join('')||'<p class="m">Appears once the knowledge base is loaded.</p>'}</div>
+  <div class="card"><h2>4. What officers often find weak</h2><p class="m">Patterns taken from real refusal letters. Check your own answers against them.</p><ul>${fl.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`);
+  if(kb.length)showQ();
+}
+function saveFact(i,v){const f=LS('rf_facts','{}');f[i]=v;localStorage.rf_facts=JSON.stringify(f)}
+function tick(i,on){const ev=[...new Set(kb.flatMap(k=>k.evidence_to_prepare||[]))];let d=LS('rf_ready','[]').filter(x=>ev.includes(x));
+  d=on?[...new Set([...d,ev[i]])]:d.filter(x=>x!==ev[i]);localStorage.rf_ready=JSON.stringify(d);$('#pg').textContent=`${d.length} of ${ev.length}`}
+function showQ(){const k=kb[+val('pq')];$('#qi').innerHTML=`<b>What the officer is checking:</b> ${esc(k.officer_checks)}<br><b>Good answers usually cover:</b> ${(k.key_points||[]).map(p=>esc(p.point)).join('; ')}<br><b>Structure:</b> ${esc(k.answer_structure)}`;$('#pr').innerHTML=''}
+function checkAns(){
+  const k=kb[+val('pq')],r=analyse({id:null,question:k.question,answer:val('pa')},{fee_gbp:null});
+  $('#pr').innerHTML=`<h3>Feedback <span class="v ${r.verdict}">${r.verdict}</span></h3><p class="m">A guide for practice, not a score. Discuss it with your counsellor.</p>
+  ${r.highlights.map(h=>`<p>• <mark>${esc(h.text.slice(0,90))}</mark> ${esc(h.reason)}</p>`).join('')||'<p>No weak lines found by the checks.</p>'}
+  ${r.missing_points.length?`<p><b>Not yet covered:</b> ${r.missing_points.map(esc).join('; ')}</p>`:''}
+  <p><b>Next try:</b> ${esc(r.stronger_structure)}</p><p class="m">Fill each [your real fact] from section 1. If you do not have the fact yet, go and research it. Never make one up.</p>`;
+}
+
+// ---------- dashboard, bin, export ----------
+async function dashView(){
+  const[a,r,c]=await Promise.all([sb.from('rf_analysis').select('issue_tags,verdict').is('deleted_at',null),sb.from('rf_reasons').select('categories').is('deleted_at',null),sb.from('rf_cases').select('id',{count:'exact',head:true}).is('deleted_at',null)]);
+  const cnt=(rows,f)=>{const m={};(rows||[]).forEach(x=>f(x).forEach(k=>m[k]=(m[k]||0)+1));return Object.entries(m).sort((p,q)=>q[1]-p[1]).slice(0,10)};
+  const bars=l=>{const mx=Math.max(1,...l.map(x=>x[1]));return l.map(([k,n])=>`<tr><td>${esc(k)}</td><td style="width:50%"><div class="bar" style="width:${n/mx*100}%"></div></td><td>${n}</td></tr>`).join('')||'<tr><td class="m">No data yet.</td></tr>'};
+  app(`<div class="card"><h2>Dashboard</h2><p class="m">${c.count||0} cases visible to you.</p><h3>Top refusal reasons</h3><table>${bars(cnt(r.data,x=>x.categories))}</table>
+  <h3>Common answer problems</h3><table>${bars(cnt(a.data,x=>x.issue_tags))}</table><h3>Verdicts</h3><table>${bars(cnt(a.data,x=>[x.verdict]))}</table></div>`);
+}
+async function binView(){
+  const{data}=await sb.from('rf_cases').select('id,case_code,deleted_at').not('deleted_at','is',null);
+  app(`<div class="card"><h2>Recycle bin</h2><table>${(data||[]).map(c=>`<tr><td>${esc(c.case_code)}</td><td>${esc(c.deleted_at)}</td><td><button class="b s" onclick="restore('${c.id}')">Restore</button></td></tr>`).join('')||'<tr><td class="m">Bin is empty.</td></tr>'}</table>
+  <p class="m">Deleted answers and plan items can be restored by an admin in the database for now.</p></div>`);
+}
+async function restore(id){const{error}=await sb.from('rf_cases').update({deleted_at:null}).eq('id',id);audit('restore','case',id);error?err(error):binView()}
+function exportCase(){
+  audit('export','case',cur.id);const b=new Blob([JSON.stringify({case:{...cur,qa:undefined,an:undefined,plan:undefined,reasons:undefined},qa:cur.qa,reasons:cur.reasons,analysis:cur.an,plan:cur.plan},null,1)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`${cur.case_code}.json`;a.click();
+}
+start();
+</script></body></html>
